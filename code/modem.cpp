@@ -107,18 +107,50 @@ void modemInit() {
     blink_short();
   }
   logCaptureLn(String("PDU模式设置完成"));
-  int ceregRetry = 0;
-  while (!waitCEREG() && ceregRetry < 30) {
-    logCaptureLn(String("等待网络注册..."));
-    ceregRetry++;
-    blink_short();
+
+  // 第一阶段：如果配置了首选/Fallback运营商，优先应用；否则保持自动选网
+  if (config.operatorPlmn.length() > 0) {
+    logCaptureLn(String("优先连接首选/Fallback运营商: ") + config.operatorPlmn);
+    applyOperatorConfig();
   }
-  if (ceregRetry < 30) {
-    logCaptureLn(String("网络已注册"));
+
+  int ceregRetry = 0;
+  while (!waitCEREG() && ceregRetry < 25) {
+    ceregRetry++;
+    logCaptureLn(String("等待网络注册 (") + String(ceregRetry) + "/25)...");
+    blink_short(800);
+  }
+
+  // 第二阶段：如果指定运营商未成功注册，尝试回退到自动选网
+  if (!waitCEREG() && config.operatorPlmn.length() > 0) {
+    logCaptureLn(String("首选运营商注册超时，尝试自动搜网回退..."));
+    sendATandWaitOK("AT+COPS=0", 10000);
+    int autoRetry = 0;
+    while (!waitCEREG() && autoRetry < 15) {
+      autoRetry++;
+      logCaptureLn(String("等待自动选网注册 (") + String(autoRetry) + "/15)...");
+      blink_short(800);
+    }
+  }
+
+  if (waitCEREG()) {
+    logCaptureLn(String("4G网络已注册就绪"));
     modemReady = true;
   } else {
-    logCaptureLn(String("⚠️ 网络注册超时（无SIM卡或信号差），模组功能不可用"));
+    logCaptureLn(String("⚠️ 网络注册超时（无SIM卡或信号差），系统将在后台持续守护自愈"));
     modemReady = false;
+  }
+}
+
+// 应用运营商锁定设置
+void applyOperatorConfig() {
+  if (config.operatorPlmn.length() > 0) {
+    logCaptureLn(String("锁定运营商 PLMN: ") + config.operatorPlmn);
+    String cmd = "AT+COPS=1,2,\"" + config.operatorPlmn + "\"";
+    sendATandWaitOK(cmd.c_str(), 15000);
+  } else {
+    logCaptureLn(String("恢复自动搜网模式 (AT+COPS=0)"));
+    sendATandWaitOK("AT+COPS=0", 10000);
   }
 }
 
@@ -156,10 +188,16 @@ bool waitCEREG() {
     if (Serial1.available()) {
       char c = Serial1.read();
       resp += c;
-      if (resp.indexOf("+CEREG:") >= 0) {
-        if (resp.indexOf(",1") >= 0 || resp.indexOf(",5") >= 0) return true;
-        if (resp.indexOf(",0") >= 0 || resp.indexOf(",2") >= 0 || 
-            resp.indexOf(",3") >= 0 || resp.indexOf(",4") >= 0) return false;
+      int idx = resp.indexOf("+CEREG:");
+      if (idx >= 0) {
+        int comma = resp.indexOf(',', idx);
+        if (comma >= 0) {
+          int stat = resp.substring(comma + 1).toInt();
+          if (stat == 1 || stat == 5) return true;
+          if (stat == 0 || stat == 2 || stat == 3 || stat == 4 || stat == 11) {
+            return false;
+          }
+        }
       }
     }
     server.handleClient();

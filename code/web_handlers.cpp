@@ -92,6 +92,7 @@ void handleRoot() {
   html.replace("%SMTP_SEND_TO%", config.smtpSendTo);
   html.replace("%ADMIN_PHONE%", config.adminPhone);
   html.replace("%NUMBER_BLACK_LIST%", config.numberBlackList);
+  html.replace("%OPERATOR_PLMN%", config.operatorPlmn);
 
   // 概览页面的配置状态
   bool emailOk = config.smtpServer.length() > 0 && config.smtpUser.length() > 0 &&
@@ -890,6 +891,17 @@ void handleSave() {
     config.numberBlackList = server.arg("numberBlackList");
   }
 
+  // 运营商设置表单
+  bool plmnChanged = false;
+  if (server.hasArg("operatorPlmn")) {
+    String newPlmn = server.arg("operatorPlmn");
+    newPlmn.trim();
+    if (newPlmn != config.operatorPlmn) {
+      config.operatorPlmn = newPlmn;
+      plmnChanged = true;
+    }
+  }
+
   // 推送通道配置：只在对应通道的字段存在时更新
   for (int i = 0; i < MAX_PUSH_CHANNELS; i++) {
     String idx = String(i);
@@ -919,6 +931,9 @@ void handleSave() {
   
   saveConfig();
   configValid = isConfigValid();
+  if (plmnChanged) {
+    applyOperatorConfig();
+  }
   
   String html = R"rawliteral(
 <!DOCTYPE html>

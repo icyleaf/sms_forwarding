@@ -199,6 +199,7 @@ const char* htmlPage = R"rawliteral(
       <a data-panel="email"><span class="ico">📧</span> <span>邮件通知</span></a>
       <a data-panel="push"><span class="ico">🔗</span> <span>推送通道</span></a>
       <a data-panel="admin"><span class="ico">👤</span> <span>管理员 &amp; 黑名单</span></a>
+      <a data-panel="carrier"><span class="ico">📶</span> <span>运营商设置</span></a>
       <div class="sidebar-divider"></div>
       <div class="sidebar-section-label">工具</div>
       <a data-panel="sendsms"><span class="ico">📤</span> <span>发送短信</span></a>
@@ -332,6 +333,41 @@ const char* htmlPage = R"rawliteral(
         </div>
       </div>
       <button type="submit" class="btn btn-primary btn-block btn-save">保存配置</button>
+      </form>
+    </div>
+
+    <!-- ===== Carrier / PLMN Settings ===== -->
+    <div class="panel" id="panel-carrier">
+      <h1 class="page-title">运营商网络设置</h1>
+      <p class="page-subtitle">配置 4G 模组搜网与 Fallback 备选运营商（解决国际漫游或搜网失败）</p>
+      <form action="/save" method="POST" id="mainFormCarrier">
+      <div class="card">
+        <div class="card-header">📶 4G 运营商选择与 Fallback</div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">首选 / Fallback 运营商</label>
+            <select class="form-input" id="carrierSelect" onchange="onCarrierChange(this)">
+              <option value="">自动选网 (默认推荐)</option>
+              <option value="46000">中国移动 (46000)</option>
+              <option value="46001">中国联通 (46001)</option>
+              <option value="46011">中国电信 (46011)</option>
+              <option value="46015">中国广电 (46015)</option>
+              <option value="44010">日本 NTT DOCOMO (44010)</option>
+              <option value="44020">日本 SoftBank 软银 (44020)</option>
+              <option value="44050">日本 KDDI / au (44050)</option>
+              <option value="custom">自定义输入 PLMN 代码...</option>
+            </select>
+            <p class="form-hint">在国外漫游或自动搜网困难时，模组开机将优先锁定该运营商</p>
+          </div>
+          <div class="form-group" id="customPlmnGroup" style="display:none;">
+            <label class="form-label">自定义 PLMN 代码</label>
+            <input class="form-input" type="text" id="customPlmnInput" placeholder="例如：44010" maxlength="6" oninput="onCustomPlmnInput(this)">
+            <p class="form-hint">输入 5 或 6 位的运营商 MCC+MNC 数字代码</p>
+          </div>
+          <input type="hidden" name="operatorPlmn" id="operatorPlmnHidden" value="%OPERATOR_PLMN%">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block btn-save">保存运营商设置</button>
       </form>
     </div>
 
@@ -655,13 +691,51 @@ const char* htmlPage = R"rawliteral(
         el.scrollTop = el.scrollHeight;
       }).catch(function() { if (el.textContent === '加载中...') el.textContent = '无法获取日志'; });
     }
+    // ---- Carrier UI ----
+    function initCarrierUI() {
+      var hidden = document.getElementById('operatorPlmnHidden');
+      var sel = document.getElementById('carrierSelect');
+      var customGroup = document.getElementById('customPlmnGroup');
+      var customInput = document.getElementById('customPlmnInput');
+      if (!hidden || !sel) return;
+      var curVal = hidden.value.trim();
+      var found = false;
+      for (var i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === curVal && curVal !== 'custom') {
+          sel.selectedIndex = i;
+          found = true;
+          break;
+        }
+      }
+      if (!found && curVal.length > 0) {
+        sel.value = 'custom';
+        customGroup.style.display = 'block';
+        customInput.value = curVal;
+      }
+    }
+    function onCarrierChange(el) {
+      var customGroup = document.getElementById('customPlmnGroup');
+      var customInput = document.getElementById('customPlmnInput');
+      var hidden = document.getElementById('operatorPlmnHidden');
+      if (el.value === 'custom') {
+        customGroup.style.display = 'block';
+        hidden.value = customInput.value.trim();
+      } else {
+        customGroup.style.display = 'none';
+        hidden.value = el.value;
+      }
+    }
+    function onCustomPlmnInput(el) {
+      document.getElementById('operatorPlmnHidden').value = el.value.trim();
+    }
+
     var _origSwitchPanel = switchPanel;
     switchPanel = function(name) {
       _origSwitchPanel(name);
       if (name === 'log') { refreshLog(); startLogPoll(); }
       else stopLogPoll();
     };
-    document.addEventListener('DOMContentLoaded', function() { refreshLog(); startLogPoll(); });
+    document.addEventListener('DOMContentLoaded', function() { initCarrierUI(); refreshLog(); startLogPoll(); });
   </script>
 </body>
 </html>

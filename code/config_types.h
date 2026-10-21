@@ -44,6 +44,7 @@ struct Config {
   String webUser;      // Web管理账号
   String webPass;      // Web管理密码
   String numberBlackList;  // 号码黑名单（换行符分隔）
+  String operatorPlmn; // 首选/Fallback 运营商PLMN代码（如 44010，留空为自动）
 };
 
 // 默认Web管理账号密码

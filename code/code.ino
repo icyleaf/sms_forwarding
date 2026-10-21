@@ -137,6 +137,19 @@ void loop() {
       logCaptureLn(String("⚠️ 请访问 " + getDeviceUrl() + " 配置系统参数"));
     }
   }
+
+  // ---- 4G 网络注册后台守护与自愈机制 ----
+  static unsigned long lastModemCheck = 0;
+  if (!modemReady && millis() - lastModemCheck > 20000) {
+    lastModemCheck = millis();
+    if (waitCEREG()) {
+      modemReady = true;
+      logCaptureLn(String("4G网络已在后台成功自动就绪！"));
+    } else if (config.operatorPlmn.length() > 0) {
+      applyOperatorConfig();
+    }
+  }
+
   checkConcatTimeout();
   if (Serial.available()) Serial1.write(Serial.read());
   checkSerial1URC();

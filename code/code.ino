@@ -25,16 +25,40 @@ void setup() {
   loadConfig();
   configValid = isConfigValid();
 
-  // ---- WiFi 连接优化 ----
+  // ---- WiFi 连接（优化双频合一与多 AP 环境连接） ----
+  WiFi.disconnect(true, true);             // 清除历史 WiFi 连接与 NVS 缓存
+  delay(100);
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);                    // 关闭 Modem Sleep，提高连接响应速度
   WiFi.setAutoReconnect(true);             // 断线后自动重连
-  // 使用快速扫描而非全信道扫描（全信道扫描在空信道上等待超时极慢）
-  // 首次连接成功后 ESP32 会自动记住信道，下次启动更快
-  WiFi.setScanMethod(WIFI_FAST_SCAN);
-  WiFi.setSortMethod(WIFI_CONNECT_AP_BY_SIGNAL);
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  logCaptureLn(String("连接wifi: ") + String(WIFI_SSID));
+  WiFi.setTxPower(WIFI_POWER_17dBm);       // 稳定射频功耗，防止供电波动
+
+  // 扫描并锁定信号最佳的 2.4G 物理 BSSID 与信道，避免双频合一或虚拟 AP 协商失败
+  int n = WiFi.scanNetworks(false, false, false, 300);
+  int bestRssi = -1000;
+  uint8_t bestBssid[6];
+  int bestChannel = 0;
+  bool found = false;
+  for (int i = 0; i < n; ++i) {
+    if (WiFi.SSID(i) == WIFI_SSID) {
+      if (WiFi.RSSI(i) > bestRssi) {
+        bestRssi = WiFi.RSSI(i);
+        bestChannel = WiFi.channel(i);
+        memcpy(bestBssid, WiFi.BSSID(i), 6);
+        found = true;
+      }
+    }
+  }
+  WiFi.scanDelete();
+  delay(50);
+
+  if (found) {
+    logCaptureLn(String("连接wifi: ") + String(WIFI_SSID) + " (已锁定 2.4G 信道: " + String(bestChannel) + ")");
+    WiFi.begin(WIFI_SSID, WIFI_PASS, bestChannel, bestBssid);
+  } else {
+    logCaptureLn(String("连接wifi: ") + String(WIFI_SSID));
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+  }
 
   // 带超时的等待连接，失败则重启重试
   unsigned long wifiStart = millis();

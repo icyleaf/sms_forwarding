@@ -140,13 +140,29 @@ void loop() {
 
   // ---- 4G 网络注册后台守护与自愈机制 ----
   static unsigned long lastModemCheck = 0;
-  if (!modemReady && millis() - lastModemCheck > 20000) {
+  static int retryCounter = 0;
+  if (!modemReady && millis() - lastModemCheck > 15000) {
     lastModemCheck = millis();
-    if (waitCEREG()) {
+    retryCounter++;
+    int stat = getCEREGStatus();
+    logCaptureLn(String("[网络守护] 第 ") + String(retryCounter) + " 次自愈检查: CEREG=" + String(stat));
+
+    if (stat == 1 || stat == 5) {
       modemReady = true;
-      logCaptureLn(String("4G网络已在后台成功自动就绪！"));
-    } else if (config.operatorPlmn.length() > 0) {
-      applyOperatorConfig();
+      logCaptureLn(String("🎉 4G网络已在后台成功自动就绪！(状态: ") + String(stat == 1 ? "本地" : "漫游") + ")");
+    } else {
+      if (config.operatorPlmn.length() > 0) {
+        logCaptureLn(String("[网络守护] 重新下发首选运营商: ") + config.operatorPlmn);
+        applyOperatorConfig();
+      } else {
+        // 未指定运营商且处于受限(11)或无服务(0)，每3次尝试一次射频重新激活
+        if (retryCounter % 3 == 0) {
+          logCaptureLn(String("[网络守护] 触发射频重新激活 (CFUN 0/1)..."));
+          sendATandWaitOK("AT+CFUN=0", 2000);
+          delay(1000);
+          sendATandWaitOK("AT+CFUN=1", 2000);
+        }
+      }
     }
   }
 

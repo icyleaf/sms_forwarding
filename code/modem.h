@@ -8,6 +8,7 @@ void modemPowerCycle();
 void resetModule();
 void modemInit();
 bool sendATandWaitOK(const char* cmd, unsigned long timeout);
+int getCEREGStatus();
 bool waitCEREG();
 void applyOperatorConfig();
 void blink_short(unsigned long gap_time = 500);

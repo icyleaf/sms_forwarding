@@ -178,31 +178,26 @@ bool sendATandWaitOK(const char* cmd, unsigned long timeout) {
   return false;
 }
 
+// 获取当前CEREG数字状态码（-1=无响应, 0=未注册, 1=本地注册, 2=搜索中, 3=拒绝, 5=漫游注册, 11=紧急受限）
+int getCEREGStatus() {
+  String resp = sendATCommand("AT+CEREG?", 2000);
+  int idx = resp.indexOf("+CEREG:");
+  if (idx >= 0) {
+    int comma = resp.indexOf(',', idx);
+    if (comma >= 0) {
+      String stat = resp.substring(comma + 1);
+      stat.trim();
+      return stat.toInt();
+    }
+  }
+  return -1;
+}
+
 // 检测网络注册状态（LTE/4G）
 // CEREG状态: 1=已注册本地, 5=已注册漫游
 bool waitCEREG() {
-  Serial1.println("AT+CEREG?");
-  unsigned long start = millis();
-  String resp = "";
-  while (millis() - start < 2000) {
-    if (Serial1.available()) {
-      char c = Serial1.read();
-      resp += c;
-      int idx = resp.indexOf("+CEREG:");
-      if (idx >= 0) {
-        int comma = resp.indexOf(',', idx);
-        if (comma >= 0) {
-          int stat = resp.substring(comma + 1).toInt();
-          if (stat == 1 || stat == 5) return true;
-          if (stat == 0 || stat == 2 || stat == 3 || stat == 4 || stat == 11) {
-            return false;
-          }
-        }
-      }
-    }
-    server.handleClient();
-  }
-  return false;
+  int stat = getCEREGStatus();
+  return (stat == 1 || stat == 5);
 }
 
 // 发送短信（PDU模式）
